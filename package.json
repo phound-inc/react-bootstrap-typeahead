@@ -10,7 +10,6 @@
     "example": "./scripts/buildExample.sh",
     "build": "./scripts/build.sh",
     "lint": "eslint .",
-    "prepublish": "npm run lint && npm test && npm run build",
     "test": "./node_modules/karma/bin/karma start karma.conf.js"
   },
   "keywords": [

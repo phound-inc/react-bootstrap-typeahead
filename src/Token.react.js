@@ -38,7 +38,7 @@ const Token = React.createClass({
   },
 
   _renderRemoveableToken() {
-    const {children, className, onRemove, selected, ...otherProps} = this.props;
+    const {children, className, onRemove, selected, tabEnabled, ...otherProps} = this.props;
 
     return (
       <div
@@ -46,7 +46,7 @@ const Token = React.createClass({
         className={cx('token', 'token-removeable', {
           'token-selected': selected,
         }, className)}
-        tabIndex={0}>
+        tabIndex={tabEnabled ? 0 : -1}>
         {children}
         <span
           className="close-button"

@@ -115,7 +115,7 @@ const TokenizerInput = React.createClass({
   },
 
   _renderToken(option, idx) {
-    const {disabled, labelKey, onRemove, renderToken} = this.props;
+    const {disabled, labelKey, onRemove, renderToken, tabEnableTokens} = this.props;
     const onRemoveWrapped = () => onRemove(option);
 
     if (renderToken) {
@@ -126,7 +126,8 @@ const TokenizerInput = React.createClass({
       <Token
         disabled={disabled}
         key={idx}
-        onRemove={onRemoveWrapped}>
+        onRemove={onRemoveWrapped}
+        tabEnabled={tabEnableTokens}>
         {getOptionLabel(option, labelKey)}
       </Token>
     );

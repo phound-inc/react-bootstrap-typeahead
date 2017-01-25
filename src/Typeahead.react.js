@@ -1,7 +1,7 @@
 'use strict';
 
 import cx from 'classnames';
-import {find, isEqual, noop} from 'lodash';
+import {find, includes, isEqual, noop} from 'lodash';
 import onClickOutside from 'react-onclickoutside';
 import React, {PropTypes} from 'react';
 
@@ -38,6 +38,20 @@ const Typeahead = React.createClass({
      * options unless handled as such by `Typeahead`'s parent.
      */
     allowNew: PropTypes.bool,
+    /**
+     * Callback for validating user-input text. Return boolean.
+     */
+    newItemValidator: PropTypes.func,
+    /**
+     * Whether or not to clear text input when new item validation fails
+     */
+    clearTextOnValidationFailure: PropTypes.bool,
+    /**
+     * Whether or not you can tab between tokens
+     */
+    tabEnableTokens: PropTypes.bool,
+    showOptionsOnFocus: PropTypes.bool,
+    enterNewTokenOnKeycodes: PropTypes.array,
     /**
      * Whether or not filtering should be case-sensitive.
      */
@@ -126,8 +140,14 @@ const Typeahead = React.createClass({
   getDefaultProps() {
     return {
       allowNew: false,
+      newItemValidator: text => {
+        return true;
+      },
+      clearTextOnValidationFailure: true,
+      tabEnableTokens: true,
+      showOptionsOnFocus: true,
+      enterNewTokenOnKeycodes: [],
       caseSensitive: false,
-      defaultSelected: [],
       dropup: false,
       filterBy: [],
       labelKey: 'label',
@@ -201,6 +221,11 @@ const Typeahead = React.createClass({
     }
   },
 
+  componentDidMount() {
+    // Bind handleKeyUp to dom so we can jump in front of bootstrap handling
+    this.containerDiv.querySelector('input').addEventListener('keyup', this._handleKeyup);
+  },
+
   render() {
     const {allowNew, className, dropup, labelKey, paginate} = this.props;
     const {shownResults, text} = this.state;
@@ -224,6 +249,9 @@ const Typeahead = React.createClass({
         className={cx('bootstrap-typeahead', 'open', {
           'dropup': dropup,
         }, className)}
+        ref={d => {
+          this.containerDiv = d;
+        }}
         style={{position: 'relative'}}>
         {this._renderInput(results)}
         {this._renderMenu(results, shouldPaginate)}
@@ -278,6 +306,19 @@ const Typeahead = React.createClass({
     this.props.onInputChange(text);
   },
 
+  /**
+   * Public method to allow external clearing of the input. Clears only text
+   */
+  clearText() {
+    const text = '';
+
+    this.setState({
+      text,
+    });
+
+    this.props.onInputChange(text);
+  },
+
   focus() {
     this.refs.input.focus();
   },
@@ -291,10 +332,11 @@ const Typeahead = React.createClass({
       name,
       placeholder,
       renderToken,
+      tabEnableTokens,
     } = this.props;
     const {activeIndex, selected, text} = this.state;
     const Input = multiple ? TokenizerInput : TypeaheadInput;
-    const inputProps = {bsSize, disabled, name, placeholder, renderToken};
+    const inputProps = {bsSize, disabled, name, placeholder, renderToken, tabEnableTokens};
 
     return (
       <Input
@@ -364,7 +406,9 @@ const Typeahead = React.createClass({
 
   _handleFocus(e) {
     this.props.onFocus(e);
-    this.setState({showMenu: true});
+    if (this.props.showOptionsOnFocus) {
+      this.setState({showMenu: true});
+    }
   },
 
   _handleTextChange(text) {
@@ -405,15 +449,17 @@ const Typeahead = React.createClass({
         this.setState({activeIndex});
         break;
       case ESC:
-      case TAB:
         // Prevent closing dialogs.
-        e.keyCode === ESC && e.preventDefault();
-
+        e.preventDefault();
+        this.swallowNextEscKeyUp = this.state.showMenu;
         this._hideDropdown();
         break;
+      case TAB:
       case RETURN:
         // Prevent submitting forms.
         e.preventDefault();
+
+        e.keyCode === TAB && this._hideDropdown();
 
         if (this.state.showMenu) {
           let selected = options[activeIndex];
@@ -421,13 +467,45 @@ const Typeahead = React.createClass({
         }
         break;
     }
+
+    if (includes(this.props.enterNewTokenOnKeycodes, e.keyCode)) {
+      if (options.length === 1 && options[0].customOption) {
+        e.preventDefault();
+        this._handleAddOption(options[0]);
+      }
+    }
+  },
+
+  _handleKeyup(e) {
+    if (this.swallowNextEscKeyUp && e.keyCode === ESC) {
+      this.swallowNextEscKeyUp = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }
   },
 
   _handleAddOption(selectedOption) {
-    const {multiple, labelKey, onChange, onInputChange} = this.props;
+    const {
+      multiple,
+      labelKey,
+      onChange,
+      onInputChange,
+      newItemValidator,
+      clearTextOnValidationFailure,
+    } = this.props;
 
     let selected;
     let text;
+
+    if (selectedOption.customOption
+      && !newItemValidator(getOptionLabel(selectedOption, labelKey))) {
+
+      if (clearTextOnValidationFailure) {
+        this.clearText();
+      }
+      this._hideDropdown();
+      return;
+    }
 
     if (multiple) {
       // If multiple selections are allowed, add the new selection to the
